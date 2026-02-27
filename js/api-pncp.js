@@ -3,12 +3,23 @@ const API_BASE = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
 const ApiPNCP = {
   onlyDigits: (s) => (s || "").replace(/\D+/g, ""),
 
-  isAAAAMMDD: (s) => /^\d{8}$/.test(s),
+  // Pega a data de hoje e a data de X dias atrás no formato AAAAMMDD
+  getDateRange: (daysAgo = 60) => {
+    const today = new Date();
+    const past = new Date();
+    past.setDate(today.getDate() - daysAgo);
 
-  normalizeModalidades: (value) => {
-    const raw = (value || "").split(",").map(s => s.trim()).filter(Boolean);
-    const nums = raw.map(s => ApiPNCP.onlyDigits(s)).filter(s => s.length > 0);
-    return Array.from(new Set(nums));
+    const format = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}${m}${d}`;
+    };
+
+    return {
+      dataInicial: format(past),
+      dataFinal: format(today)
+    };
   },
 
   buildUrl: ({dataInicial, dataFinal, codigoModalidadeContratacao, pagina=1, tamanhoPagina=50}) => {
