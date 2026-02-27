@@ -3,7 +3,7 @@ const API_BASE = "https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao";
 const ApiPNCP = {
   onlyDigits: (s) => (s || "").replace(/\D+/g, ""),
 
-  // Pega a data de hoje e a data de X dias atrás no formato AAAAMMDD
+  // Calcula a data de hoje e a data de X dias atrás no formato AAAAMMDD
   getDateRange: (daysAgo = 60) => {
     const today = new Date();
     const past = new Date();
@@ -38,7 +38,16 @@ const ApiPNCP = {
     try {
       const resp = await fetch(url, { signal: ctrl.signal });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      return await resp.json();
+      
+      // SOLUÇÃO PARA O ERRO: "Unexpected end of JSON input"
+      // Lemos a resposta como texto primeiro. Se a API do governo não devolver nada (em branco), 
+      // o sistema não bloqueia e retorna apenas uma lista vazia de forma segura.
+      const text = await resp.text();
+      if (!text || text.trim() === "") {
+        return { data: [] };
+      }
+      return JSON.parse(text);
+
     } finally {
       clearTimeout(t);
     }
