@@ -29,7 +29,7 @@ const mapData = {
   ]
 };
 
-// Modalidades da API PNCP mais comuns para contratação (Dispensa, Inexigibilidade, Credenciamento, Pregão...)
+// Modalidades da API PNCP mais comuns para contratação médica
 const MODALIDADES_BUSCA = ["6", "8", "2", "3", "7"]; 
 
 // Palavras-chave exclusivas para buscar Vagas Médicas
@@ -38,7 +38,7 @@ const MEDICAL_KEYWORDS = ["médico", "medico", "medicina", "plantão", "plantao"
 // Estado da Aplicação
 let currentRegion = "";
 let currentState = "";
-let currentCitiesData = {}; // Agrupa as vagas por cidade
+let currentCitiesData = {}; 
 
 // === NAVEGAÇÃO ENTRE VISTAS ===
 function showView(viewName) {
@@ -100,33 +100,40 @@ function openRegion(regionName) {
 async function openState(stateName, stateSigla) {
   currentState = stateSigla;
   document.getElementById('citiesTitle').textContent = `Vagas em ${stateName}`;
-  document.getElementById('citiesSubtitle').textContent = "Buscando editais médicos...";
+  document.getElementById('citiesSubtitle').textContent = "Buscando editais médicos (últimos 30 dias)...";
   document.getElementById('citiesGrid').innerHTML = '';
   document.getElementById('loadingCities').classList.remove('hidden');
   showView('cities');
 
-  const { dataInicial, dataFinal } = ApiPNCP.getDateRange(60); // Últimos 60 dias
+  // Ajustado para 30 dias para não estourar o limite de datas da API
+  const { dataInicial, dataFinal } = ApiPNCP.getDateRange(30); 
   let rawItems = [];
 
   try {
-    for (let mod of MODALIDADES_BUSCA) {
-      const url = ApiPNCP.buildUrl({ dataInicial, dataFinal, codigoModalidadeContratacao: mod, tamanhoPagina: 100 });
+    for (let i = 0; i < MODALIDADES_BUSCA.length; i++) {
+      const mod = MODALIDADES_BUSCA[i];
+      // Tamanho página 500 para trazer mais resultados por requisição
+      const url = ApiPNCP.buildUrl({ dataInicial, dataFinal, codigoModalidadeContratacao: mod, tamanhoPagina: 500 });
+      
       const json = await ApiPNCP.fetchJsonWithTimeout(url);
       const items = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
       rawItems = rawItems.concat(items);
+
+      // PAUSA DE 300ms ENTRE AS CHAMADAS (Isso evita o Erro 429 - Too Many Requests)
+      if (i < MODALIDADES_BUSCA.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
     }
 
-    // Filtragem Local (A Mágica para achar vagas de Médicos naquele estado)
     currentCitiesData = {};
     let medicalCount = 0;
 
     rawItems.forEach(item => {
       const uf = ApiPNCP.pick(item, ["uf", "siglaUf"]);
-      if (uf !== stateSigla) return; // Filtra pelo estado escolhido
+      if (uf !== stateSigla) return; 
 
       const objeto = ApiPNCP.pick(item, ["objetoCompra", "objeto", "descricaoObjeto"]).toLowerCase();
       
-      // Verifica se contém palavras-chave médicas
       const isMedical = MEDICAL_KEYWORDS.some(kw => objeto.includes(kw));
       if (!isMedical) return;
 
@@ -145,11 +152,10 @@ async function openState(stateName, stateSigla) {
     document.getElementById('citiesSubtitle').textContent = `${medicalCount} vagas encontradas em ${cityNames.length} municípios.`;
 
     if (cityNames.length === 0) {
-      document.getElementById('citiesGrid').innerHTML = `<div class="col-span-full p-8 text-center text-slate-500 bg-white rounded-2xl border border-slate-200">Nenhuma vaga médica recente encontrada neste estado.</div>`;
+      document.getElementById('citiesGrid').innerHTML = `<div class="col-span-full p-8 text-center text-slate-500 bg-white rounded-2xl border border-slate-200">Nenhuma vaga médica recente encontrada neste estado nos últimos 30 dias.</div>`;
       return;
     }
 
-    // Desenhar os cards de Cidades
     cityNames.forEach(city => {
       const btn = document.createElement('button');
       const vagas = currentCitiesData[city].length;
@@ -167,7 +173,7 @@ async function openState(stateName, stateSigla) {
 
   } catch (error) {
     document.getElementById('loadingCities').classList.add('hidden');
-    document.getElementById('citiesSubtitle').textContent = "Erro ao buscar os dados.";
+    document.getElementById('citiesSubtitle').innerHTML = `<span class="text-red-500 font-medium">Erro ao buscar os dados na API: ${error.message}</span>`;
     console.error(error);
   }
 }
@@ -188,11 +194,11 @@ function openVacancies(cityName) {
     const formatData = dataPub ? new Date(dataPub).toLocaleDateString('pt-BR') : '';
 
     const card = document.createElement('div');
-    card.className = "bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between h-full";
+    card.className = "bg-white rounded-2xl border border-slate-200 p-6 flex flex-col justify-between h-full shadow-sm hover:shadow-md transition-all";
     card.innerHTML = `
       <div>
         <div class="flex justify-between items-start mb-4">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">Aberto</span>
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-100">Recente</span>
           <span class="text-xs text-slate-400 font-medium">${formatData}</span>
         </div>
         <h3 class="text-sm font-bold text-slate-800 mb-2">${orgao}</h3>
@@ -201,9 +207,9 @@ function openVacancies(cityName) {
       <div class="mt-4 pt-4 border-t border-slate-100">
         ${link ? `
           <a href="${link}" target="_blank" class="w-full text-center bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-xl transition-all shadow-sm inline-block">
-            Abrir Edital Original
+            Acessar Edital Oficial
           </a>
-        ` : '<span class="text-xs text-red-500">Link indisponível</span>'}
+        ` : '<span class="text-xs text-red-500 bg-red-50 px-3 py-1.5 rounded-lg inline-block font-medium">Link do edital não informado pela prefeitura</span>'}
       </div>
     `;
     grid.appendChild(card);
@@ -212,5 +218,5 @@ function openVacancies(cityName) {
   showView('vacancies');
 }
 
-// Inicializa a primeira tela quando o JS carrega
+// Inicializa a primeira tela
 document.addEventListener('DOMContentLoaded', initDashboard);
