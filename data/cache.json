@@ -1,0 +1,20 @@
+{
+  "generatedAt": null,
+  "rangeDays": 30,
+  "modalidades": [
+    "12",
+    "9",
+    "8",
+    "6",
+    "7",
+    "4",
+    "5",
+    "3",
+    "10",
+    "11",
+    "2"
+  ],
+  "source": "contratacoes/proposta",
+  "items": [],
+  "errors": []
+}
